@@ -7,6 +7,105 @@ const asyncHandler = require("../middleware/async");
 
 // @desc Get all users
 // @route GET /api/users
+const getUsers = asyncHandler(async (req, res, next) => {
+  res.status(200).json(res.advancedResults);
+});
 
-const getUsers = asyncHandler()
+// @desc Get single user
+// @route GET /api/users/me
+// @route GET /api/users/:id
+
+const getUser = asyncHandler(async (req, res, next) => {
+  const user = await User.findById(req.params.id || req.user.id);
+
+  if (!user) {
+    return next(
+      new ErrorResponse(`User not found with id of ${req.params.id}`, 404)
+    );
+  }
+
+  // Make sure user is user or admin
+  if (user._id.toString() !== req.user.id && req.user.role !== "admin") {
+    return next(
+      new ErrorResponse(
+        `User ${req.user.id} is not authorized to view this user`,
+        401
+      )
+    );
+  }
+
+  res.status(200).json({
+    success: true,
+    data: user,
+  });
+});
+
+// @desc Create user
+// @route POST /api/users
+const createUser = asyncHandler(async (req, res, next) => {
+  const user = await User.create(req.body);
+
+  res.status(201).json({
+    success: true,
+    data: user,
+  });
+});
+
+// @desc Update user
+// @route PUT /api/users/:id
+const updateUser = asyncHandler(async (req, res, next) => {
+  const user = await User.findById(req.params.id);
+  if (!user) {
+    return next(
+      new ErrorResponse(`User not found with id of ${req.params.id}`, 404)
+    );
+  }
+
+  if (user._id.toString() !== req.user.id && req.user.role !== "admin") {
+    return next(
+      new ErrorResponse(
+        `User ${req.user.id} is not authorized to update this user`,
+        401
+      )
+    );
+  }
+
+  if (req.body.role && req.user.role !== "admin") {
+    return next(
+      new ErrorResponse(
+        `User ${req.user.id} is not authorized to update role`,
+        401
+      )
+    );
+  }
+
+  user = await User.findByIdAndUpdate(req.params.id, req.body, {
+    new: true,
+    runValidators: true,
+  });
+
+  res.status(200).json({
+    success: true,
+    data: user,
+  });
+});
+
+// @decs Delete user
+// @route DELETE /api/users/:id
+const deleteUser = asyncHandler(async (req, res, next) => {
+  const user = await User.findById(req.params.id);
+  if (!user) {
+    return next(
+      new ResponseError(`User not found with id of ${req.params.id}`, 404)
+    );
+  }
+
+  await user.remove();
+  res.status(200).json({
+    success: true,
+    data: {},
+  });
+});
+
+
 
