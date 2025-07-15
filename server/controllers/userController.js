@@ -107,5 +107,142 @@ const deleteUser = asyncHandler(async (req, res, next) => {
   });
 });
 
+// @desc Get quizzes created by user
+// @route GET /api/users/me/quizzes
+const getUserQuizzes = asyncHandler(async (req, res, next) => {
+  const quizzes = await Quiz.find({ createdBy: req.user.id });
+  res.status(200).json({
+    success: true,
+    count: quizzes.length,
+    data: quizzes,
+  });
+});
 
+// @desc Get rooms created by user
+// @route GET /api/users/me/rooms
+const getUserRooms = asyncHandler(async (req, res, next) => {
+  const rooms = await Room.find({ createdBy: req.user.id });
 
+  res.status(200).json({
+    success: true,
+    count: rooms.length,
+    data: rooms,
+  });
+});
+
+// @desc Get user stats
+// @route GET /api/users/me/stats
+const getUserStats = asyncHandler(async (req, res, next) => {
+  const stats = await Room.aggregate([
+    { $match: { "participants.user": req.user._id } },
+    { $unwind: "$participants" },
+    { $match: { "participants.user": req.user._id } },
+    {
+      $group: {
+        _id: null,
+        totalQuizzes: { $sum: 1 },
+        averageScore: { $avg: "$participants.score" },
+        highestScore: { $max: "$participants.score" },
+        categories: {
+          $addToSet: "$category",
+        },
+      },
+    },
+  ]);
+
+  if (stats.length === 0) {
+    return res.status(200).json({
+      success: true,
+      data: {
+        totalQuizzes: 0,
+        averageScore: 0,
+        highestScore: 0,
+        categories: [],
+      },
+    });
+  }
+
+  res.status(200).json({
+    success: true,
+    data: stats[0],
+  });
+});
+
+// @desc    Award badge to user
+// @route   PUT /api/users/:id/badge
+const awardBadge = asyncHandler(async (req, res, next) => {
+  const user = await User.findById(req.params.id);
+
+  if (!user) {
+    return next(
+      new ErrorResponse(`User not found with id of ${req.params.id}`, 404)
+    );
+  }
+
+  const { name, description } = req.body;
+
+  if (!name || !description) {
+    return next(
+      new ErrorResponse(`Please provide badge name and description`, 400)
+    );
+  }
+
+  user.badges.push({
+    name,
+    description,
+    earnedAt: Date.now(),
+  });
+
+  await user.save();
+
+  res.status(200).json({
+    success: true,
+    data: user.badges,
+  });
+});
+
+// @desc    Add XP to user
+// @route   PUT /api/users/:id/xp
+const addXp = asyncHandler(async (req, res, next) => {
+  const user = await User.findById(req.params.id);
+
+  if (!user) {
+    return next(
+      new ErrorResponse(`User not found with id of ${req.params.id}`, 404)
+    );
+  }
+
+  const { amount } = req.body;
+
+  if (!amount || isNaN(amount)) {
+    return next(new ErrorResponse(`Please provide a valid XP amount`, 400));
+  }
+
+  user.xp += parseInt(amount);
+
+  // Check for level up (1000 XP per level)
+  const newLevel = Math.floor(user.xp / 1000) + 1;
+  if (newLevel > user.level) {
+    user.level = newLevel;
+  }
+
+  await user.save();
+
+  res.status(200).json({
+    success: true,
+    data: { xp: user.xp, level: user.level },
+  });
+});
+
+module.exports = {
+  getUsers,
+  getUser,
+  createUser,
+  updateUser,
+  deleteUser,
+  getUserQuizzes,
+  getUserRooms,
+  getUserStats,
+  awardBadge,
+  addXp,
+};
